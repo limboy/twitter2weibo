@@ -2,6 +2,8 @@
 
 $accounts = include 'config.php';
 
+define('DATA_DIR', dirname(__FILE__).'/data/');
+
 foreach ($accounts as $account)
 {
 	$pid = pcntl_fork();
@@ -13,7 +15,7 @@ foreach ($accounts as $account)
 
 function sync($t_username, $s_email, $s_pwd)
 {
-	$data_file = 'data/'.$t_username.'.log';
+	$data_file = DATA_DIR.$t_username.'.log';
 	$t_url = 'http://api.twitter.com/1/statuses/user_timeline.json?screen_name='.$t_username;
 
 	if (!file_exists($data_file) || file_get_contents($data_file) == '')
@@ -62,7 +64,7 @@ function sync($t_username, $s_email, $s_pwd)
 }
 
 function send2weibo($s_email, $s_pwd, $tweet) {
-	$cookie = 'data/'.$s_email.'.cookie.txt';
+	$cookie = DATA_DIR.$s_email.'.cookie.txt';
 	if (!file_exists($cookie))
 	{
 		$ch = curl_init("https://login.sina.com.cn/sso/login.php?username=$s_email&password=$s_pwd&returntype=TEXT");
