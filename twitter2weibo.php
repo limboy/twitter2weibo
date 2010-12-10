@@ -64,8 +64,10 @@ function sync($t_username, $s_email, $s_pwd)
 }
 
 function send2weibo($s_email, $s_pwd, $tweet) {
+	// 会有cookie失效问题，所以需要重新取一下，如果是在一次执行过程中，就不用再取了
 	$cookie = DATA_DIR.$s_email.'.cookie.txt';
-	if (!file_exists($cookie))
+	static $fetched_cookie = array();
+	if (empty($fetched_cookie[$s_email]))
 	{
 		$ch = curl_init("https://login.sina.com.cn/sso/login.php?username=$s_email&password=$s_pwd&returntype=TEXT");
 		curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
@@ -77,6 +79,7 @@ function send2weibo($s_email, $s_pwd, $tweet) {
 		curl_exec($ch);
 		curl_close($ch);
 		unset($ch);
+		$fetched_cookie[$s_email] = true;
 	}
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_URL, "http://t.sina.com.cn/mblog/publish.php");
