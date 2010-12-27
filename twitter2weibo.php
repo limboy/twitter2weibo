@@ -1,19 +1,23 @@
 <?php
-
 $accounts = include 'config.php';
 
 define('DATA_DIR', dirname(__FILE__).'/data/');
 
 foreach ($accounts as $account)
 {
-	$pid = pcntl_fork();
-	if(!$pid)
-	{
-		sync($account['t_username'], $account['s_email'], $account['s_pwd']);
-	}
+	sync($account['t_username'], $account['s_email'], $account['s_pwd']);
 }
 
 function sync($t_username, $s_email, $s_pwd)
+{
+	$pid = pcntl_fork();
+	if(!$pid)
+	{
+		doSync($t_username, $s_email, $s_pwd);
+	}
+}
+
+function doSync($t_username, $s_email, $s_pwd)
 {
 	$data_file = DATA_DIR.$t_username.'.log';
 	$t_url = 'http://api.twitter.com/1/statuses/user_timeline.json?screen_name='.$t_username;
@@ -25,37 +29,28 @@ function sync($t_username, $s_email, $s_pwd)
 	else 
 	{
 		$new_rs = file_get_contents($t_url);
-		$new_tweets = json_decode($new_rs);
-		$origin_tweets = json_decode(file_get_contents($data_file));
+		$new_tweets = json_decode($new_rs, true);
+		$origin_tweets = json_decode(file_get_contents($data_file), true);
 
-		$tobe_sent_tweets = array();
-		foreach($new_tweets as $tweet)
+		$new_tweets_arr = array();
+		foreach($new_tweets as $val)
 		{
-			if ($tweet->id != $origin_tweets[0]->id)
-			{
-				if (strpos($tweet->text, 'RT ') === FALSE && strpos($tweet->text, '@') === FALSE)
-					$tobe_sent_tweets[] = array('id' => $tweet->id, 'text' => $tweet->text);
-			} 
-			else
-			{
-				break;
-			}
+			$new_tweets_arr[$val['id_str']] = $val['text'];
 		}
 
-		if (!empty($tobe_sent_tweets))
+		$origin_tweets_arr = array();
+		foreach($origin_tweets as $val)
 		{
-			foreach($origin_tweets as $tweet)
-			{
-				if ($tweet->id == $tobe_sent_tweets[0]['id'])
-				{
-					// 用户删除了某推
-					return;
-				}
-			}
-			foreach($tobe_sent_tweets as $weibo)
-			{
-				send2weibo($s_email, $s_pwd, $weibo['text']);
-			}
+			$origin_tweets_arr[$val['id_str']] = $val['text'];
+		}
+
+		$tobe_sent_tweets = array_diff_assoc($new_tweets_arr, $origin_tweets_arr);
+		krsort($tobe_sent_tweets);
+
+		foreach($tobe_sent_tweets as $tweet)
+		{
+			if(strpos($tweet, '@') === FALSE)
+				send2weibo($s_email, $s_pwd, $tweet);
 		}
 
 		file_put_contents($data_file, $new_rs);
@@ -64,10 +59,9 @@ function sync($t_username, $s_email, $s_pwd)
 }
 
 function send2weibo($s_email, $s_pwd, $tweet) {
-	// 会有cookie失效问题，所以需要重新取一下，如果是在一次执行过程中，就不用再取了
+	static $cookie_fetched = array();
 	$cookie = DATA_DIR.$s_email.'.cookie.txt';
-	static $fetched_cookie = array();
-	if (empty($fetched_cookie[$s_email]))
+	if (empty($cookie_fetched[$s_email]))
 	{
 		$ch = curl_init("https://login.sina.com.cn/sso/login.php?username=$s_email&password=$s_pwd&returntype=TEXT");
 		curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
@@ -79,7 +73,7 @@ function send2weibo($s_email, $s_pwd, $tweet) {
 		curl_exec($ch);
 		curl_close($ch);
 		unset($ch);
-		$fetched_cookie[$s_email] = true;
+		$cookie_fetched[$s_email] = true;
 	}
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_URL, "http://t.sina.com.cn/mblog/publish.php");
@@ -91,3 +85,6 @@ function send2weibo($s_email, $s_pwd, $tweet) {
 	curl_exec($ch);
 	curl_close($ch);
 }
+
+
+
