@@ -1,24 +1,29 @@
 <?php
+
 $accounts = include 'config.php';
+
+$apikey = $accounts['key'];
+
+unset($accounts['key']);
 
 define('DATA_DIR', dirname(__FILE__).'/data/');
 
 foreach ($accounts as $account)
 {
-	sync($account['t_username'], $account['s_email'], $account['s_pwd']);
+	sync($account['t_username'], $account['s_email'], $account['s_pwd'], $apikey);
 	//dosync($account['t_username'], $account['s_email'], $account['s_pwd']);
 }
 
-function sync($t_username, $s_email, $s_pwd)
+function sync($t_username, $s_email, $s_pwd, $apikey)
 {
 	$pid = pcntl_fork();
 	if(!$pid)
 	{
-		doSync($t_username, $s_email, $s_pwd);
+		doSync($t_username, $s_email, $s_pwd, $apikey);
 	}
 }
 
-function doSync($t_username, $s_email, $s_pwd)
+function doSync($t_username, $s_email, $s_pwd, $apikey)
 {
 	$data_file = DATA_DIR.$t_username.'.min.log';
 	$t_url = 'http://api.twitter.com/1/statuses/user_timeline.json?screen_name='.$t_username;
@@ -46,7 +51,7 @@ function doSync($t_username, $s_email, $s_pwd)
 		{
 			if(strpos($tweet, '@') === FALSE)
 			{
-				send2weibo($s_email, $s_pwd, $tweet);
+				send2weibo($s_email, $s_pwd, $tweet, $apikey);
 				sleep(1);
 			}
 		}
@@ -56,47 +61,12 @@ function doSync($t_username, $s_email, $s_pwd)
 	exit;
 }
 
-function send2weibo($s_email, $s_pwd, $tweet) {
-	static $cookie_fetched = array();
-	$cookie = DATA_DIR.$s_email.'.cookie.txt';
-	if (empty($cookie_fetched[$s_email]))
-	{
-		$login_data = array(
-			'service' => 'sso',
-			'client' => 'ssologin.js(v1.3.7)',
-			'entry' => 'sso',
-			'encoding' => 'utf-8',
-			'gateway' => 1,
-			'savestate' => 0,
-			'useticket' => 0,
-			'username' => $s_email,
-			'password' => $s_pwd,
-			'callback' => 'parent.sinaSSOController.loginCallBack',
-			'returntype' => 'IFRAME',
-			'setdomain' => 1,
-		);
-		$ch = curl_init("http://login.sina.com.cn/sso/login.php?client=ssologin.js(v1.3.7)");
-		curl_setopt($ch, CURLOPT_POST, 1);
-		curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($login_data));
-		curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
-		curl_setopt($ch, CURLOPT_HEADER, 0);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-		curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla Firefox");
-		curl_exec($ch);
-		curl_close($ch);
-		unset($ch);
-		$cookie_fetched[$s_email] = true;
-	}
+function send2weibo($s_email, $s_pwd, $tweet, $apikey) {
 	$ch = curl_init();
-	curl_setopt($ch, CURLOPT_URL, "http://t.sina.com.cn/mblog/publish.php");
-	curl_setopt($ch, CURLOPT_REFERER, "http://t.sina.com.cn");
+	curl_setopt($ch, CURLOPT_URL, "http://api.t.sina.com.cn/statuses/update.json");
+	curl_setopt($ch, CURLOPT_USERPWD, "{$s_email}:{$s_pwd}");
 	curl_setopt($ch, CURLOPT_POST, 1);
-	curl_setopt($ch, CURLOPT_POSTFIELDS, "content=".urlencode($tweet));
-	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-	curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-	curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
+	curl_setopt($ch, CURLOPT_POSTFIELDS, "source=".$apikey."&status=".urlencode($tweet));
 	curl_exec($ch);
 	curl_close($ch);
 }

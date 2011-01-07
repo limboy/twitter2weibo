@@ -1,6 +1,6 @@
 ## 使用说明
 
-* 打开config.php，在里面填入一组或多组信息(twitter_username/sina_email/sina_pwd)
+* 打开config.php，在里面填入一组或多组信息(twitter_username/sina_email/sina_pwd)和新浪微博的apikey
 * 在当前目录下新建一个data文件夹，并设置为可写入
 * 设置cron为每3分钟执行一次脚本
 
