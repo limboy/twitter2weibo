@@ -26,7 +26,7 @@ function sync($t_username, $s_email, $s_pwd, $apikey)
 function doSync($t_username, $s_email, $s_pwd, $apikey)
 {
 	$data_file = DATA_DIR.$t_username.'.min.log';
-	$t_url = 'http://api.twitter.com/1/statuses/user_timeline.json?screen_name='.$t_username;
+	$t_url = 'http://api.twitter.com/1/statuses/user_timeline.json?screen_name='.$t_username.'&rnd='.rand(0,100);
 
 	$new_rs = file_get_contents($t_url);
 	$new_tweets = json_decode($new_rs, true);
@@ -34,6 +34,15 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
 	foreach($new_tweets as $val)
 	{
 		$new_tweets_arr[$val['id_str']] = $val['text'];
+	}
+
+	static $i = 0;
+	if (empty($new_tweets_arr))
+	{
+		if ($i++ < 5)
+			doSync($t_username, $s_email, $s_pwd, $apikey);
+		else
+			exit;
 	}
 
 	if (!file_exists($data_file) || file_get_contents($data_file) == '')
@@ -52,7 +61,7 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
 			if(strpos($tweet, '@') === FALSE)
 			{
 				send2weibo($s_email, $s_pwd, $tweet, $apikey);
-				sleep(1);
+				sleep(10);
 			}
 		}
 
