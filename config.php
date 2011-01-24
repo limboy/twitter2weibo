@@ -1,15 +1,16 @@
 <?php
 
 return array(
-	'key' => '12312312312',
+	// 如果有新浪微博的apikey,可以填上，并反注释，当通过非正规渠道登录失败时会使用apikey来同步
+	// 'key' => '123123123',  
 	array(
 		't_username' => 'twitter_username',
-		's_email' => 'sina_email',
-		's_pwd' => 'sina_pwd',
+		's_email' => 'sina_weibo@email.com',
+		's_pwd' => 'sina_weibo_password',
 	),
 	array(
-		't_username' => 'twitter_username1',
-		's_email' => 'sina_email1',
-		's_pwd' => 'sina_pwd1',
+		't_username' => 'twitter_username',
+		's_email' => 'sina_weibo@email.com',
+		's_pwd' => 'sina_weibo_password',
 	),
 );
