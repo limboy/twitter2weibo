@@ -6,12 +6,10 @@ error_reporting(E_ERROR);
 if (!extension_loaded('curl'))
 	die('curl extension not found');
 
-if (touch('config.php') && chmod('config.php', 0600)) {
-    $accounts = include 'config.php';
-} else {
-    die("can't update config file");
-}
+if (!is_readable('config.php') || !touch('config.php') || !chmod('config.php', 0600))
+    die("can't read or update config file");
 
+$accounts = include 'config.php';
 
 $apikey = '';
 if (!empty($accounts['key']))
@@ -126,7 +124,10 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
 		$tobe_sent_tweets = array_diff_assoc($new_tweets_arr, $origin_tweets_arr);
 		ksort($tobe_sent_tweets);
 
-        if ($tobe_sent_tweets) {
+        // 为了避免错误阻塞，立即写入到数据文件中
+		file_put_contents($data_file, serialize($new_tweets_arr));
+
+        if (sizeof($tobe_sent_tweets)) {
             log_data("received ${t_username}'s new ". sizeof($tobe_sent_tweets) ." tweets, sync them.");
 
             foreach($tobe_sent_tweets as $key => $tweet) {
@@ -145,8 +146,6 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
         } else {
             log_data("no new tweets received, do nothing.");
         }
-
-		file_put_contents($data_file, serialize($new_tweets_arr));
 	}
 
 	if (function_exists('pcntl_fork'))
