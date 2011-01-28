@@ -79,6 +79,14 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
 	$new_tweets = json_decode($new_rs, true);
 	$new_tweets_arr = array();
 
+	if (!empty($new_tweets['error']))
+	{
+		log_data('tweets抓取出错：'.$new_rs);
+		if (function_exists('pcntl_fork'))
+			exit;
+		return FALSE;
+	}
+
 	if (!empty($new_tweets))
 	{
 		foreach($new_tweets as $val)
