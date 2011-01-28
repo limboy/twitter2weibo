@@ -1,15 +1,25 @@
 <?php
+#!/usr/bin/env php
 
-date_default_timezone_set('Asia/Shanghai');
 error_reporting(E_ERROR);
+date_default_timezone_set('Asia/Shanghai');
 
-if (!extension_loaded('curl'))
+if (!extension_loaded('curl')) {
 	die('curl extension not found');
+}
 
-if (!is_readable('config.php') || !touch('config.php') || !chmod('config.php', 0600))
+define('DIR_DATA', dirname(__FILE__).'/data/');
+define('DIR_ROOT', dirname(__FILE__).'/');
+define("RUNTIME_LOG_FILE", realpath(DIR_DATA.'./runtime.log'));
+define("CONFIG_FILE", realpath(DIR_ROOT.'/config.php'));
+define("TIME_OUT", 60);
+define("WEIBO_SEND_INTERVAL", 20);
+define('USER_AGENT', "Mozilla/5.0 (compatible; MSIE 8.0; Windows NT 5.2; Trident/4.0)");
+
+if (!is_readable(CONFIG_FILE) || !touch(CONFIG_FILE) || !chmod(CONFIG_FILE, 0600))
     die("can't read or update config file");
 
-$accounts = include 'config.php';
+$accounts = include CONFIG_FILE;
 
 $apikey = '';
 if (!empty($accounts['key']))
@@ -17,12 +27,6 @@ if (!empty($accounts['key']))
 	$apikey = $accounts['key'];
 	unset($accounts['key']);
 }
-
-define('DATA_DIR', dirname(__FILE__).'/data/');
-define("RUNTIME_LOG_FILE", DATA_DIR.'runtime.log');
-define("TIME_OUT", 60);
-define("WEIBO_SEND_INTERVAL", 20);
-define('USER_AGENT', "Mozilla/5.0 (compatible; MSIE 8.0; Windows NT 5.2; Trident/4.0)");
 
 foreach ($accounts as $account)
 {
@@ -84,7 +88,7 @@ function log_data($data)
 
 function doSync($t_username, $s_email, $s_pwd, $apikey)
 {
-	$data_file = DATA_DIR.$t_username.'.data';
+	$data_file = DIR_DATA.$t_username.'.data';
 
     // Anonymous calls are based on the IP of the host and are permitted 150 requests per hour. 
     //      @see http://dev.twitter.com/pages/rate-limiting
@@ -154,7 +158,7 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
 
 function send2weibo_via_login($s_email, $s_pwd, $tweet, $apikey) {
 	static $cookie_fetched = array();
-	$cookie = DATA_DIR.$s_email.'.cookie.txt';
+	$cookie = DIR_DATA.$s_email.'.cookie.txt';
 	if (empty($cookie_fetched[$s_email]))
 	{
 		$login_data = array(
