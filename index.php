@@ -6,5 +6,5 @@ printf("= Last upated: %s =\n\n", date('r', filemtime('config.php')));
 // reverse the logfile
 $file = array_reverse(file('data/runtime.log'));
 foreach ($file as $line) {
-    echo "$line\n";
+    echo $line;
 }
