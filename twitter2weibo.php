@@ -1,6 +1,6 @@
 <?php
 
-if (!function_exists('curl_init'))
+if (!extension_loaded('curl'))
 	die('curl extension not found');
 
 $accounts = include 'config.php';
@@ -12,7 +12,11 @@ if (!empty($accounts['key']))
 	unset($accounts['key']);
 }
 
+
 define('DATA_DIR', dirname(__FILE__).'/data/');
+define("RUNTIME_LOG_FILE", DATA_DIR.'runtime.log');
+define("TIME_OUT", 60);
+define('USER_AGENT', "Mozilla/5.0 (compatible; MSIE 8.0; Windows NT 5.2; Trident/4.0)");
 
 foreach ($accounts as $account)
 {
@@ -34,10 +38,10 @@ function sync($t_username, $s_email, $s_pwd, $apikey)
 function get_contents($url)
 {
 	$ch = curl_init();
-	curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla Firefox");
+	curl_setopt($ch, CURLOPT_USERAGENT, USER_AGENT);
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 	curl_setopt($ch, CURLOPT_URL, $url);
-	curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+	curl_setopt($ch, CURLOPT_TIMEOUT, TIME_OUT);
 	$data = curl_exec($ch);
 	curl_close($ch);
 	return $data;
@@ -67,14 +71,20 @@ function urlencode_arr($data)
 
 function log_data($data)
 {
-	file_put_contents(DATA_DIR.'runtime.log', date('Y-m-d H:i:s').': '.$data.PHP_EOL, FILE_APPEND);
+    file_put_contents(RUNTIME_LOG_FILE,
+        sprintf('%s: %s'.PHP_EOL, date('r'), $data), FILE_APPEND);
 }
+
 
 function doSync($t_username, $s_email, $s_pwd, $apikey)
 {
-	$data_file = DATA_DIR.$t_username.'.min.log';
-	$t_url = 'http://api.twitter.com/1/statuses/user_timeline.json?screen_name='.$t_username.'&rnd='.rand(0,100);
+	$data_file = DATA_DIR.$t_username.'.data';
 
+    // Anonymous calls are based on the IP of the host and are permitted 150 requests per hour. 
+    //      @see http://dev.twitter.com/pages/rate-limiting
+    $t_url = sprintf('http://api.twitter.com/1/statuses/user_timeline.json?screen_name=%s&t=%s', 
+                        $t_username, time());
+        
 	$new_rs = get_contents($t_url);
 	$new_tweets = json_decode($new_rs, true);
 	$new_tweets_arr = array();
@@ -87,34 +97,46 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
 
 	if (empty($new_tweets_arr))
 	{
-		log_data('tweets抓取失败 ('.$t_url.')'.PHP_EOL);
+		log_data('[ERROR] fetch tweets failed from ('.$t_url.')');
 		if (function_exists('pcntl_fork'))
 			exit;
 		return FALSE;
 	}
 
-	if (!file_exists($data_file) || file_get_contents($data_file) == '')
-	{
-		file_put_contents($data_file, '<?php return '.var_export($new_tweets_arr, true). '; ?>');
-	} 
+    log_data("fetch ${t_username}'s tweets is finished.");
+
+	if (!file_exists($data_file) || !filesize($data_file)) {
+        log_data("[NOTICE] ${t_username}'s data file not exists, nothing tobe done.");
+		file_put_contents($data_file, serialize($new_tweets_arr));
+	}
 	else 
 	{
-		$origin_tweets_arr = include $data_file;
+		$origin_tweets_arr = unserialize(file_get_contents($data_file));
 
 		$tobe_sent_tweets = array_diff_assoc($new_tweets_arr, $origin_tweets_arr);
 		ksort($tobe_sent_tweets);
 
-		foreach($tobe_sent_tweets as $tweet)
-		{
-			if(strpos($tweet, '@') === FALSE)
-			{
-				send2weibo_via_login($s_email, $s_pwd, $tweet, $apikey);
-				sleep(10);
-			}
-		}
+        if ($tobe_sent_tweets) {
+            log_data("received ${t_username}'s new ". sizeof($tobe_sent_tweets) ." tweets, sync them.");
 
-		file_put_contents($data_file, '<?php return '.var_export($new_tweets_arr, true).'; ?>');
+            foreach($tobe_sent_tweets as $key => $tweet) {
+                //if(strpos($tweet, '@') === FALSE) {
+                    if (send2weibo_via_login($s_email,  $s_pwd, $tweet, $apikey)
+                     || send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey)) {
+                        log_data("sync tweets to sina which key is '".$key."' finished");
+                    } else {
+                        // 请求失败的返回信息已经写在函数中
+                    }
+                    sleep(30);
+                //}
+            }
+        } else {
+            log_data("no new tweets received, do nothing.");
+        }
+
+		file_put_contents($data_file, serialize($new_tweets_arr));
 	}
+
 	if (function_exists('pcntl_fork'))
 		exit;
 }
@@ -143,8 +165,8 @@ function send2weibo_via_login($s_email, $s_pwd, $tweet, $apikey) {
 		curl_setopt($ch, CURLOPT_HEADER, 0);
 		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-		curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla Firefox");
+		curl_setopt($ch, CURLOPT_TIMEOUT, TIME_OUT);
+		curl_setopt($ch, CURLOPT_USERAGENT, USER_AGENT);
 		curl_exec($ch);
 		curl_close($ch);
 		unset($ch);
@@ -156,12 +178,12 @@ function send2weibo_via_login($s_email, $s_pwd, $tweet, $apikey) {
 	curl_setopt($ch, CURLOPT_POST, 1);
 	curl_setopt($ch, CURLOPT_POSTFIELDS, "content=".urlencode($tweet));
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-	curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+	curl_setopt($ch, CURLOPT_TIMEOUT, TIME_OUT);
 	curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
 	$rs = json_decode(curl_exec($ch), true);
 	curl_close($ch);
-	if ($rs['code'] != 'A00006')
-	{
+
+	if ($rs['code'] != 'A00006') {
 		if ($rs['code'] == 'M00003')
 		{
 			$rs['info'] = '登录失败';
@@ -171,14 +193,18 @@ function send2weibo_via_login($s_email, $s_pwd, $tweet, $apikey) {
 			$rs['info'] = '同步太频繁';
 		}
 		$rs['email'] = $s_email;
-		$rs['pwd'] = $s_pwd;
+		//$rs['pwd'] = $s_pwd;
 		$rs['tweet'] = $tweet;
 		$rs['apikey'] = $apikey;
-		log_data('同步到新浪微博出错，错误信息：'.my_json_encode($rs));
 
+		log_data('[ERROR] 同步到新浪微博出错，错误信息：'.my_json_encode($rs));
+
+        return false;
 		// try sync via apikey
-		send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey);
+		//send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey);
 	}
+
+    return true;
 }
 
 function send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey) {
@@ -191,11 +217,13 @@ function send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey) {
 	$rs = json_decode(curl_exec($ch), true);
 	if (!empty($rs['error'])) {
 		$rs['email'] = $s_email;
-		$rs['pwd'] = $s_pwd;
+		//$rs['pwd'] = $s_pwd;
 		$rs['tweet'] = $tweet;
 		$rs['apikey'] = $apikey;
-		log_data('使用apikey同步失败：'.str_replace('\\/', '/', my_json_encode($rs)));
+		log_data('[ERROR] 使用 API 同步新浪微博失败：'.str_replace('\\/', '/', my_json_encode($rs)));
+        return false;
 	}
-	curl_close($ch);
-}
 
+	curl_close($ch);
+    return true;
+}
