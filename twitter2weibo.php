@@ -99,14 +99,6 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
 	$new_tweets = json_decode($new_rs, true);
 	$new_tweets_arr = array();
 
-	if (!empty($new_tweets['error']))
-	{
-		log_data('tweets抓取出错：'.$new_rs);
-		if (function_exists('pcntl_fork'))
-			exit;
-		return FALSE;
-	}
-
 	if (!empty($new_tweets))
 	{
 		foreach($new_tweets as $val)
@@ -114,8 +106,8 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
 	}
 
     // 因为有150的查询限制，所以可能会出现查询出错的情况
-    //     @see https://github.com/feelinglucky/twitter2weibo/commit/86512602f2054d585ed872356078152c3afb58b2#twitter2weibo.php-P56
-    if ($new_tweets['error'] || empty($new_tweets_arr))
+    // @see https://github.com/feelinglucky/twitter2weibo/commit/86512602f2054d585ed872356078152c3afb58b2#twitter2weibo.php-P56
+    if ($new_tweets['error'] || empty($new_tweets))
 	{
 		log_data('[ERROR] fetch tweets failed from ('.$t_url.')');
 		if (function_exists('pcntl_fork'))
@@ -139,23 +131,27 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
         // 为了避免错误阻塞，立即写入到数据文件中
 		file_put_contents($data_file, serialize($new_tweets_arr));
 
-        if (sizeof($tobe_sent_tweets)) {
+		if (sizeof($tobe_sent_tweets))
+		{
             log_data("received ${t_username}'s new ". sizeof($tobe_sent_tweets) ." tweets, sync them.");
 
-            foreach($tobe_sent_tweets as $key => $tweet) {
+			foreach($tobe_sent_tweets as $key => $tweet)
+			{
                 // 剔除 Twitter 的回复贴，避免给新浪用户造成困扰
-                if (!preg_match("/^@\w+\s+/i", $tweet)) {
+				if (!preg_match("/^@\w+\s+/i", $tweet))
+				{
                     if (send2weibo_via_login($s_email,  $s_pwd, $tweet, $apikey)
-                     || send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey)) {
+						|| send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey))
+					{
                         log_data("sync tweets to sina which key is '".$key."' finished");
-                    } else {
-                        // 请求失败的返回信息已经写在函数中
-                    }
+					}
 
                     sleep(WEIBO_SEND_INTERVAL);
                 }
             }
-        } else {
+		}
+		else 
+		{
             log_data("no new tweets received, do nothing.");
         }
 	}
@@ -164,7 +160,8 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
 		exit;
 }
 
-function send2weibo_via_login($s_email, $s_pwd, $tweet, $apikey) {
+function send2weibo_via_login($s_email, $s_pwd, $tweet, $apikey)
+{
 	static $cookie_fetched = array();
 	$cookie = DIR_DATA.$s_email.'.cookie.txt';
 	if (empty($cookie_fetched[$s_email]))
@@ -207,7 +204,8 @@ function send2weibo_via_login($s_email, $s_pwd, $tweet, $apikey) {
 	$rs = json_decode(curl_exec($ch), true);
 	curl_close($ch);
 
-	if ($rs['code'] != 'A00006') {
+	if ($rs['code'] != 'A00006')
+	{
 		if ($rs['code'] == 'M00003')
 		{
 			$rs['info'] = '登录失败';
@@ -231,7 +229,8 @@ function send2weibo_via_login($s_email, $s_pwd, $tweet, $apikey) {
     return true;
 }
 
-function send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey) {
+function send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey)
+{
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_URL, "http://api.t.sina.com.cn/statuses/update.json");
 	curl_setopt($ch, CURLOPT_USERPWD, "{$s_email}:{$s_pwd}");
@@ -239,7 +238,8 @@ function send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey) {
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 	curl_setopt($ch, CURLOPT_POSTFIELDS, "source=".$apikey."&status=".urlencode($tweet));
 	$rs = json_decode(curl_exec($ch), true);
-	if (!empty($rs['error'])) {
+	if (!empty($rs['error']))
+	{
 		$rs['email'] = $s_email;
 		//$rs['pwd'] = $s_pwd;
 		$rs['tweet'] = $tweet;
