@@ -12,10 +12,10 @@ if (!empty($accounts['key']))
 	unset($accounts['key']);
 }
 
-
 define('DATA_DIR', dirname(__FILE__).'/data/');
 define("RUNTIME_LOG_FILE", DATA_DIR.'runtime.log');
 define("TIME_OUT", 60);
+define("WEIBO_SEND_INTERVAL", 20);
 define('USER_AGENT', "Mozilla/5.0 (compatible; MSIE 8.0; Windows NT 5.2; Trident/4.0)");
 
 foreach ($accounts as $account)
@@ -120,15 +120,17 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
             log_data("received ${t_username}'s new ". sizeof($tobe_sent_tweets) ." tweets, sync them.");
 
             foreach($tobe_sent_tweets as $key => $tweet) {
-                //if(strpos($tweet, '@') === FALSE) {
+                // 剔除 Twitter 的回复贴，避免给新浪用户造成困扰
+                if (!preg_match("/^@\w+\s+/i", $tweet)) {
                     if (send2weibo_via_login($s_email,  $s_pwd, $tweet, $apikey)
                      || send2weibo_via_apikey($s_email, $s_pwd, $tweet, $apikey)) {
                         log_data("sync tweets to sina which key is '".$key."' finished");
                     } else {
                         // 请求失败的返回信息已经写在函数中
                     }
-                    sleep(30);
-                //}
+
+                    sleep(WEIBO_SEND_INTERVAL);
+                }
             }
         } else {
             log_data("no new tweets received, do nothing.");
@@ -169,6 +171,7 @@ function send2weibo_via_login($s_email, $s_pwd, $tweet, $apikey) {
 		curl_setopt($ch, CURLOPT_USERAGENT, USER_AGENT);
 		curl_exec($ch);
 		curl_close($ch);
+        chmod($cookie, 0600); // 只有自己可以读取！
 		unset($ch);
 		$cookie_fetched[$s_email] = true;
 	}
