@@ -1,9 +1,17 @@
 <?php
 
+date_default_timezone_set('Asia/Shanghai');
+error_reporting(E_ERROR);
+
 if (!extension_loaded('curl'))
 	die('curl extension not found');
 
-$accounts = include 'config.php';
+if (touch('config.php') && chmod('config.php', 0600)) {
+    $accounts = include 'config.php';
+} else {
+    die("can't update config file");
+}
+
 
 $apikey = '';
 if (!empty($accounts['key']))
@@ -103,7 +111,9 @@ function doSync($t_username, $s_email, $s_pwd, $apikey)
 			$new_tweets_arr[$val['id_str']] = $val['text'];
 	}
 
-	if (empty($new_tweets_arr))
+    // 因为有150的查询限制，所以可能会出现查询出错的情况
+    //     @see https://github.com/feelinglucky/twitter2weibo/commit/86512602f2054d585ed872356078152c3afb58b2#twitter2weibo.php-P56
+    if ($new_tweets['error'] || empty($new_tweets_arr))
 	{
 		log_data('[ERROR] fetch tweets failed from ('.$t_url.')');
 		if (function_exists('pcntl_fork'))
